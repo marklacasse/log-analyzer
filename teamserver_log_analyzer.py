@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Teamserver Log Analyzer
+Teamserver Log Analyzer v2.0.0
 Groups and counts common error, warn, info messages from Contrast Security TeamServer logs.
 Outputs results in CSV format and provides command-line summary with key insights.
+Now with baseline comparison support for anomaly detection and trend analysis.
 """
 
 import re
 import csv
 import sys
 import os
+import json
 from collections import Counter, defaultdict
 
 def parse_log_line(line):
@@ -173,6 +175,117 @@ def analyze_log_file(filename):
         'parsed_lines': parsed_lines
     }
 
+def save_baseline(analysis_data, filename):
+    """Save analysis data as baseline for future comparisons"""
+    baseline_file = "teamserver_baseline.json"
+    
+    # Convert Counter objects to dicts for JSON serialization
+    baseline_data = {
+        'filename': filename,
+        'total_lines': analysis_data['total_lines'],
+        'parsed_lines': analysis_data['parsed_lines'],
+        'parse_rate': (analysis_data['parsed_lines']/analysis_data['total_lines']*100),
+        'level_counts': dict(analysis_data['level_counts']),
+        'error_rate': (analysis_data['level_counts']['ERROR'] / analysis_data['parsed_lines'] * 100) if analysis_data['parsed_lines'] > 0 else 0,
+        'warn_rate': (analysis_data['level_counts']['WARN'] / analysis_data['parsed_lines'] * 100) if analysis_data['parsed_lines'] > 0 else 0,
+        'top_sources': dict(analysis_data['source_counts'].most_common(10)),
+        'top_source_files': dict(analysis_data['source_file_counts'].most_common(10)),
+        'top_messages': dict(analysis_data['base_messages'].most_common(20)),
+        'system_health': get_health_status(analysis_data)
+    }
+    
+    with open(baseline_file, 'w') as f:
+        json.dump(baseline_data, f, indent=2)
+    
+    print(f"\n✅ Baseline saved to {baseline_file}")
+    print(f"   Use this baseline for future log comparisons with --compare flag")
+
+def load_baseline():
+    """Load baseline data for comparison"""
+    baseline_file = "teamserver_baseline.json"
+    
+    if not os.path.exists(baseline_file):
+        return None
+    
+    try:
+        with open(baseline_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load baseline: {e}")
+        return None
+
+def get_health_status(analysis_data):
+    """Determine system health status"""
+    total_parsed = analysis_data['parsed_lines']
+    if total_parsed == 0:
+        return "UNKNOWN"
+    
+    error_count = analysis_data['level_counts']['ERROR']
+    warn_count = analysis_data['level_counts']['WARN']
+    
+    if error_count / total_parsed > 0.05:  # > 5% error rate
+        return "CRITICAL"
+    elif error_count / total_parsed > 0.02:  # > 2% error rate
+        return "DEGRADED"
+    elif warn_count / total_parsed > 0.4:  # > 40% warning rate
+        return "UNSTABLE"
+    else:
+        return "STABLE"
+
+def compare_with_baseline(analysis_data, baseline_data):
+    """Compare current analysis with baseline and return insights"""
+    if not baseline_data:
+        return None
+    
+    total_parsed = analysis_data['parsed_lines']
+    current_error_rate = (analysis_data['level_counts']['ERROR'] / total_parsed * 100) if total_parsed > 0 else 0
+    current_warn_rate = (analysis_data['level_counts']['WARN'] / total_parsed * 100) if total_parsed > 0 else 0
+    current_parse_rate = (analysis_data['parsed_lines']/analysis_data['total_lines']*100)
+    
+    baseline_error_rate = baseline_data['error_rate']
+    baseline_warn_rate = baseline_data['warn_rate']
+    baseline_parse_rate = baseline_data['parse_rate']
+    
+    comparison = {
+        'baseline_file': baseline_data['filename'],
+        'error_rate_change': current_error_rate - baseline_error_rate,
+        'warn_rate_change': current_warn_rate - baseline_warn_rate,
+        'parse_rate_change': current_parse_rate - baseline_parse_rate,
+        'current_health': get_health_status(analysis_data),
+        'baseline_health': baseline_data['system_health'],
+        'new_issues': [],
+        'resolved_issues': [],
+        'severity_changes': []
+    }
+    
+    # Identify new issues (messages not in baseline)
+    baseline_messages = set(baseline_data['top_messages'].keys())
+    current_messages = set(msg for msg, count in analysis_data['base_messages'].most_common(50))
+    
+    for message in current_messages - baseline_messages:
+        count = analysis_data['base_messages'][message]
+        if count >= 100:  # Only flag significant new issues
+            comparison['new_issues'].append((message, count))
+    
+    # Identify resolved issues (baseline messages not in current)
+    for message in baseline_messages - current_messages:
+        if baseline_data['top_messages'][message] >= 100:
+            comparison['resolved_issues'].append((message, baseline_data['top_messages'][message]))
+    
+    # Check for severity changes in common messages
+    for message in baseline_messages & current_messages:
+        baseline_count = baseline_data['top_messages'][message]
+        current_count = analysis_data['base_messages'][message]
+        
+        if baseline_count >= 10 and current_count >= 10:  # Only compare significant messages
+            change_ratio = current_count / baseline_count
+            if change_ratio > 3:  # 3x increase
+                comparison['severity_changes'].append((message, baseline_count, current_count, 'INCREASED'))
+            elif change_ratio < 0.33:  # 3x decrease
+                comparison['severity_changes'].append((message, baseline_count, current_count, 'DECREASED'))
+    
+    return comparison
+
 def generate_csv_reports(analysis_data, base_filename):
     """Generate CSV report from analysis data"""
     
@@ -196,8 +309,8 @@ def generate_csv_reports(analysis_data, base_filename):
     
     return [csv_filename]
 
-def print_summary(analysis_data):
-    """Print command-line summary with key insights"""
+def print_summary(analysis_data, comparison_data=None):
+    """Print command-line summary with key insights and baseline comparison"""
     
     print("\n" + "="*80)
     print("LOG ANALYSIS SUMMARY")
@@ -365,20 +478,141 @@ def print_summary(analysis_data):
         print(f"  {i}. {rec}")
     
     print(f"\nFor detailed message breakdown, see the generated CSV file.")
+    
+    # Baseline comparison section
+    if comparison_data:
+        print(f"\n" + "="*80)
+        print("BASELINE COMPARISON ANALYSIS")
+        print("="*80)
+        
+        print(f"\nComparing against baseline: {comparison_data['baseline_file']}")
+        print(f"Baseline System Health: {comparison_data['baseline_health']}")
+        print(f"Current System Health: {comparison_data['current_health']}")
+        
+        # Health status change
+        if comparison_data['current_health'] != comparison_data['baseline_health']:
+            if comparison_data['current_health'] in ['CRITICAL', 'DEGRADED'] and comparison_data['baseline_health'] == 'STABLE':
+                print(f"🚨 ALERT: System degraded from {comparison_data['baseline_health']} to {comparison_data['current_health']}")
+            elif comparison_data['current_health'] == 'STABLE' and comparison_data['baseline_health'] in ['CRITICAL', 'DEGRADED']:
+                print(f"✅ IMPROVEMENT: System recovered from {comparison_data['baseline_health']} to {comparison_data['current_health']}")
+            else:
+                print(f"📊 STATUS CHANGE: {comparison_data['baseline_health']} → {comparison_data['current_health']}")
+        else:
+            print(f"📊 STATUS: System health unchanged ({comparison_data['current_health']})")
+        
+        # Rate changes
+        print(f"\nRate Changes from Baseline:")
+        error_change = comparison_data['error_rate_change']
+        warn_change = comparison_data['warn_rate_change']
+        parse_change = comparison_data['parse_rate_change']
+        
+        print(f"  Error Rate: {error_change:+.2f}% change")
+        print(f"  Warning Rate: {warn_change:+.2f}% change")
+        print(f"  Parse Success Rate: {parse_change:+.2f}% change")
+        
+        # New issues
+        if comparison_data['new_issues']:
+            print(f"\n🔴 NEW CRITICAL ISSUES (not in baseline):")
+            for message, count in comparison_data['new_issues'][:5]:
+                display_msg = message[:70] + "..." if len(message) > 70 else message
+                print(f"  • {count:,}x: {display_msg}")
+        
+        # Resolved issues
+        if comparison_data['resolved_issues']:
+            print(f"\n✅ RESOLVED ISSUES (present in baseline, not in current):")
+            for message, baseline_count in comparison_data['resolved_issues'][:5]:
+                display_msg = message[:70] + "..." if len(message) > 70 else message
+                print(f"  • Was {baseline_count:,}x: {display_msg}")
+        
+        # Severity changes
+        if comparison_data['severity_changes']:
+            print(f"\n📈 SIGNIFICANT CHANGES IN EXISTING ISSUES:")
+            for message, baseline_count, current_count, direction in comparison_data['severity_changes'][:5]:
+                change_ratio = current_count / baseline_count
+                display_msg = message[:60] + "..." if len(message) > 60 else message
+                if direction == 'INCREASED':
+                    print(f"  ⬆️ {display_msg}")
+                    print(f"     {baseline_count:,} → {current_count:,} ({change_ratio:.1f}x increase)")
+                else:
+                    print(f"  ⬇️ {display_msg}")
+                    print(f"     {baseline_count:,} → {current_count:,} ({1/change_ratio:.1f}x decrease)")
+        
+        # Recommendations based on comparison
+        print(f"\n" + "="*80)
+        print("BASELINE-INFORMED RECOMMENDATIONS")
+        print("="*80)
+        
+        baseline_recommendations = []
+        
+        if error_change > 1.0:  # Error rate increased by more than 1%
+            baseline_recommendations.append("🚨 URGENT: Error rate significantly increased - investigate immediate causes")
+        
+        if warn_change > 10.0:  # Warning rate increased by more than 10%
+            baseline_recommendations.append("⚠️ HIGH: Warning rate spike detected - system stress indicators")
+        
+        if parse_change < -5.0:  # Parse rate decreased by more than 5%
+            baseline_recommendations.append("📊 MEDIUM: Parse success rate declined - possible log format issues")
+        
+        if comparison_data['new_issues']:
+            baseline_recommendations.append("🔍 HIGH: New critical issues detected - require immediate analysis")
+        
+        if len(comparison_data['severity_changes']) > 3:
+            baseline_recommendations.append("📈 MEDIUM: Multiple issue severity changes - system behavior shift")
+        
+        if not baseline_recommendations:
+            if comparison_data['current_health'] == 'STABLE' and comparison_data['baseline_health'] == 'STABLE':
+                baseline_recommendations.append("✅ MAINTAIN: System performing within baseline parameters")
+            else:
+                baseline_recommendations.append("📊 MONITOR: Continue tracking against baseline")
+        
+        for i, rec in enumerate(baseline_recommendations, 1):
+            print(f"  {i}. {rec}")
+        
+        print(f"\n💡 Baseline comparison provides context for identifying anomalies and trends.")
+    else:
+        print(f"\n💡 Tip: Run with --save-baseline to create a baseline for future comparisons.")
 
 def main():
     """Main function"""
-    if len(sys.argv) != 2:
-        print("Usage: python3 teamserver_log_analyzer.py <log_file>")
-        print("Example: python3 teamserver_log_analyzer.py lsit327w-contrast.log")
+    # Parse command line arguments
+    save_baseline_flag = False
+    compare_flag = False
+    log_file = None
+    
+    args = sys.argv[1:]
+    
+    if len(args) == 0:
+        print("Usage: python3 teamserver_log_analyzer.py <log_file> [--save-baseline] [--compare]")
+        print("Examples:")
+        print("  python3 teamserver_log_analyzer.py lsit327w-contrast.log")
+        print("  python3 teamserver_log_analyzer.py contrastnew.log --save-baseline")
+        print("  python3 teamserver_log_analyzer.py problem.log --compare")
         sys.exit(1)
     
-    log_file = sys.argv[1]
+    # Process arguments
+    for arg in args:
+        if arg == '--save-baseline':
+            save_baseline_flag = True
+        elif arg == '--compare':
+            compare_flag = True
+        elif not arg.startswith('--'):
+            log_file = arg
+    
+    if not log_file:
+        print("Error: No log file specified")
+        sys.exit(1)
+    
     base_filename = os.path.splitext(log_file)[0]
     
     print("Starting Teamserver Log Analysis...")
     print(f"Log file: {log_file}")
     print(f"Output CSV file will be: {base_filename}_base_messages.csv")
+    
+    if save_baseline_flag:
+        print("📊 Will save analysis as baseline for future comparisons")
+    
+    if compare_flag:
+        print("🔍 Will compare against existing baseline")
     
     # Analyze the log file
     analysis_data = analyze_log_file(log_file)
@@ -395,8 +629,22 @@ def main():
     for csv_file in csv_files:
         print(f"  • {csv_file}")
     
+    # Load baseline for comparison if requested
+    comparison_data = None
+    if compare_flag:
+        baseline_data = load_baseline()
+        if baseline_data:
+            comparison_data = compare_with_baseline(analysis_data, baseline_data)
+            print(f"📊 Loaded baseline: {baseline_data['filename']}")
+        else:
+            print("⚠️ No baseline found. Run with --save-baseline on a clean log first.")
+    
     # Print summary to console
-    print_summary(analysis_data)
+    print_summary(analysis_data, comparison_data)
+    
+    # Save baseline if requested
+    if save_baseline_flag:
+        save_baseline(analysis_data, log_file)
     
     print(f"\nAnalysis complete! Check the CSV file for detailed message breakdown.")
 

@@ -1,6 +1,6 @@
 # TeamServer Log Analyzer
 
-A comprehensive log analysis tool for Contrast Security TeamServer logs. This tool groups and analyzes common error, warning, and info messages to help identify patterns and issues in large log files.
+A comprehensive log analysis tool for Contrast Security TeamServer logs. This tool groups and analyzes common error, warning, and info messages to help identify patterns and issues in large log files. **Now with baseline comparison support for anomaly detection and trend analysis!**
 
 ## Features
 
@@ -9,6 +9,9 @@ A comprehensive log analysis tool for Contrast Security TeamServer logs. This to
 - **CSV Output**: Generates structured CSV reports for further analysis
 - **Command-line Summary**: Provides immediate insights and key findings
 - **Issue Detection**: Automatically identifies common problems like connection timeouts, broken pipes, and system degradation
+- **🆕 Baseline Comparison**: Save clean logs as baselines and compare problematic logs for anomaly detection
+- **🆕 Health Monitoring**: Track system health transitions (STABLE → DEGRADED → CRITICAL)
+- **🆕 Trend Analysis**: Detect new issues, resolved issues, and severity changes over time
 
 ## Installation
 
@@ -22,13 +25,33 @@ cd teamserver-log-analyzer
 
 ## Usage
 
+### Basic Analysis
 ```bash
 python3 teamserver_log_analyzer.py <log_file>
 ```
 
-### Example
+### Baseline Functionality (NEW!)
+
+#### Create a Baseline from Clean Logs
 ```bash
-python3 teamserver_log_analyzer.py lsit327w-contrast.log
+python3 teamserver_log_analyzer.py clean_log.log --save-baseline
+```
+
+#### Compare Problematic Logs Against Baseline
+```bash
+python3 teamserver_log_analyzer.py problem_log.log --compare
+```
+
+### Example Workflow
+```bash
+# Step 1: Create baseline from a clean/healthy log
+python3 teamserver_log_analyzer.py contrastnew.log --save-baseline
+
+# Step 2: Analyze problematic logs with baseline comparison
+python3 teamserver_log_analyzer.py lsit327w-contrast.log --compare
+
+# Step 3: Regular analysis without baseline
+python3 teamserver_log_analyzer.py some_other_log.log
 ```
 
 ## Log Format Support
@@ -58,6 +81,54 @@ Example:
 - Top 10 most common message groups
 - **Key Insights**: Automated analysis of critical issues found
 - **System Health Assessment**: Analysis of error patterns and degradation
+
+## Baseline Comparison Analysis
+
+### What is Baseline Analysis?
+Baseline analysis allows you to:
+- **Save a clean log** as a reference point when your system is healthy
+- **Compare problematic logs** against this baseline to identify what changed
+- **Detect anomalies** by highlighting new issues, resolved issues, and severity changes
+- **Track system health** transitions over time
+
+### How It Works
+1. **Create Baseline**: Run analysis on a clean log with `--save-baseline`
+2. **Compare**: Analyze new logs with `--compare` to see deviations from baseline
+3. **Get Insights**: Receive contextual analysis showing what's new, what's resolved, and what's gotten worse
+
+### Baseline Comparison Output
+When using `--compare`, you'll get additional analysis sections:
+
+```
+================================================================================
+BASELINE COMPARISON ANALYSIS
+================================================================================
+
+Comparing against baseline: contrastnew.log
+Baseline System Health: STABLE
+Current System Health: DEGRADED
+🚨 ALERT: System degraded from STABLE to DEGRADED
+
+Rate Changes from Baseline:
+  Error Rate: +2.74% change
+  Warning Rate: +24.65% change
+  Parse Success Rate: -86.11% change
+
+🔴 NEW CRITICAL ISSUES (not in baseline):
+  • 2,978x: Application exception overridden by commit exception
+  • 1,408x: [TASK] 0 successful keys for DOTNET
+
+📈 SIGNIFICANT CHANGES IN EXISTING ISSUES:
+  ⬆️ [PREFLIGHT] duplicate instance found: NUM for rule
+     854 → 10,037 (11.8x increase)
+
+================================================================================
+BASELINE-INFORMED RECOMMENDATIONS
+================================================================================
+  1. 🚨 URGENT: Error rate significantly increased - investigate immediate causes
+  2. ⚠️ HIGH: Warning rate spike detected - system stress indicators
+  3. 🔍 HIGH: New critical issues detected - require immediate analysis
+```
 
 ## Key Insights Provided
 
@@ -132,6 +203,16 @@ KEY INSIGHTS FROM LOG ANALYSIS:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### v2.0.0 (Current)
+- **NEW**: Baseline comparison functionality for anomaly detection
+- **NEW**: Save clean logs as baselines with `--save-baseline`
+- **NEW**: Compare problematic logs against baseline with `--compare`
+- **NEW**: System health tracking (STABLE, UNSTABLE, DEGRADED, CRITICAL)
+- **NEW**: Identify new issues, resolved issues, and severity changes
+- **NEW**: Baseline-informed recommendations for targeted troubleshooting
+- **ENHANCED**: More detailed system health assessment
+- **ENHANCED**: Better trend analysis and rate change detection
 
 ### v1.0.0
 - Initial release

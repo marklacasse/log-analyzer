@@ -1,0 +1,54 @@
+{
+  "filename": "contrastnew.log",
+  "total_lines": 7621,
+  "parsed_lines": 7359,
+  "parse_rate": 96.56213095394305,
+  "level_counts": {
+    "INFO": 6536,
+    "WARN": 823
+  },
+  "error_rate": 0.0,
+  "warn_rate": 11.183584726185623,
+  "top_sources": {
+    "agent_b13e3326-fe69-4358-83b0-e31c2d1a144b@Pnc": 5314,
+    "ScheduledTaskUser": 1413,
+    "": 629,
+    "XSSITPAC": 2,
+    "(anonymous)": 1
+  },
+  "top_source_files": {
+    "PreflightService.java:494": 3039,
+    "JIRAUserUpdateTask.java:141": 1082,
+    "PreflightVulnerabilitiesService.java:364": 854,
+    "PreflightService.java:394": 700,
+    "CacheBuilder.java:120": 98,
+    "LoadRulepack.java:225": 83,
+    "AppInstrumentationService.java:187": 74,
+    "AppInstrumentationService.java:165": 74,
+    "LoadRulepack.java:250": 69,
+    "AgentAPIServersRestController.java:104": 58
+  },
+  "top_messages": {
+    "Organization:  PNC-Prod(ID-fe69-NUM-83b0-ID), JIRA instance ID": 1084,
+    "[PREFLIGHT] duplicate instance found:  NUM for rule": 854,
+    "Putting auth into cache, username >> agent_ID-fe69-NUM-83b0-ID@Pnc auth >> true": 33,
+    "Marking authenticated service account cache:  agent_ID-fe69-NUM-83b0-ID@Pnc|ID|AGENT, authenticated": 33,
+    "Removed filter cache for organization:  1": 33,
+    "Marking service account cache:  agent_ID-fe69-NUM-83b0-ID@Pnc|AGENT service account": 31,
+    "[VULNERABILITY] agent:  Java 6.12.1, rule": 30,
+    "[SESSION] Organization:  PNC-Prod(ID-fe69-NUM-83b0-ID), existing agent session ID value": 27,
+    "Loading protection rule:  cve-NUM-NUM": 19,
+    "Added ws:  http": 19,
+    "[dotnet] Using legacy version path:  META-INF/MANIFEST.MF": 9,
+    "Destination name is longer than 'MaximumFileNameLength' system property, potential problem with recovery can result from name truncation.": 6,
+    "[Not~SERVER-OFFLINE] Received ServerOfflineEvent(super=NotificationEvent(timestamp=ID, organization=PNC-Prod(ID-fe69-NUM-83b0-e31c2d": 6,
+    "[Not~NEW-SERVER] Received NewServerEvent(super=NotificationEvent(timestamp=ID, organization=PNC-Prod(ID-fe69-NUM-83b0-ID),": 5,
+    "Found version [4.1.4.0]": 4,
+    "Completed initialization in NUM ms": 4,
+    "Vulnerability rejected by event validator DataFlowHttpRequestVulnValidator (xxe), reason:  HTTP request is empty., report": 4,
+    "[VULNERABILITY] agent:  Java 3.7.9.NUM, rule": 4,
+    "[servo] 164 metrics written to file:  /app/contrast/data/logs/servo_activemq_2025_27_06.log": 4,
+    "Evicting cache entry for application instrumentation configuration before update:  orgId=1, serverId=ID, appId=ID-aba9-463e-ad25-ID": 3
+  },
+  "system_health": "STABLE"
+}
